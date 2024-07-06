@@ -1,0 +1,9 @@
+target/
+reddit/
+.mypy_cache/
+ignore/
+images/
+
+*.marker
+*.torrent
+*.dump

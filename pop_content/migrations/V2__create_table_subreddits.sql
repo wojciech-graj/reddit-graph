@@ -1,0 +1,7 @@
+CREATE TABLE subreddits(
+    name VARCHAR(32) NOT NULL PRIMARY KEY,
+    id INTEGER NOT NULL GENERATED ALWAYS AS IDENTITY
+);
+
+CREATE INDEX idx_subreddits_id ON subreddits(id);
+

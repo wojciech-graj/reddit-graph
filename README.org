@@ -1,0 +1,416 @@
+#+TITLE: Graph of Reddit
+#+PROPERTY: header-args:sql :engine postgres :dbhost localhost :dbport 5432 :dbuser root :dbpassword 1234 :database reddit
+
+[[./images/4k/egdes_no_labels.png]]
+
+This is a graph of all of Reddit.com, as of June 2024. The graphs show cross-references between subreddits in their wikis, sidebars, descriptions, etc.
+
+If you simply want to see the graphs, go to the [[./images]] directory. 32K images can be found [[https://drive.google.com/drive/folders/1A3JtqmPrZsoDltDaEITM0rIzb6hIoIRa?usp=sharing][here]].
+
+* Usage
+
+** Import reference data into PostgreSQL
+#+BEGIN_SRC bash
+gunzip wiki.gz
+pg_restore -d DB_NAME wiki
+#+END_SRC
+
+** View graph in Gephi
+Open [[./reddit_wiki.gephi]] using [[https://gephi.org/][Gephi]].
+
+* Insights
+** Referenced subreddits
+#+BEGIN_SRC sql
+SELECT
+    count(*)
+FROM
+    subreddits;
+#+END_SRC
+
+#+RESULTS:
+|  count |
+|--------|
+| 587748 |
+
+** Valid subreddits
+#+BEGIN_SRC sql
+SELECT
+    count(*)
+FROM
+    subreddits
+WHERE
+    nsfw IS NOT NULL;
+#+END_SRC
+
+#+RESULTS:
+|  count |
+|--------|
+| 370774 |
+
+** Non-disconnected valid subreddits
+#+BEGIN_SRC sql
+SELECT
+    count(*)
+FROM
+    subreddits
+WHERE
+    nsfw IS NOT NULL
+    AND NOT disconnected;
+#+END_SRC
+
+#+RESULTS:
+| count |
+|-------|
+| 87782 |
+
+** Wiki pages
+#+BEGIN_SRC sql
+SELECT
+    count(*)
+FROM
+    wikis;
+#+END_SRC
+
+#+RESULTS:
+|  count |
+|--------|
+| 401012 |
+
+** References
+#+BEGIN_SRC sql
+SELECT
+    count(*),
+    sum(total)
+FROM
+    wiki_refs;
+#+END_SRC
+
+#+RESULTS:
+|  count |     sum |
+|--------+---------|
+| 700179 | 2588933 |
+
+** Valid references
+#+BEGIN_SRC sql
+SELECT
+    count(*),
+    sum(total)
+FROM
+    wiki_refs
+    JOIN subreddits ON wiki_refs.subreddit_to = subreddits.name
+WHERE
+    nsfw IS NOT NULL;
+#+END_SRC
+
+#+RESULTS:
+|  count |     sum |
+|--------+---------|
+| 604954 | 2474431 |
+
+** Self-references
+#+BEGIN_SRC sql
+SELECT
+    count(*),
+    sum(total)
+FROM
+    wiki_refs
+WHERE
+    subreddit_to = subreddit_from;
+#+END_SRC
+
+#+RESULTS:
+|  count |     sum |
+|--------+---------|
+| 161636 | 1744424 |
+
+** Most referencing subreddits excl. self-refs
+#+BEGIN_SRC sql
+SELECT
+    subreddit_from,
+    count(*)
+FROM (
+    SELECT
+        subreddit_from
+    FROM
+        wiki_refs
+    GROUP BY
+        subreddit_to,
+        subreddit_from) AS subreddits_from
+GROUP BY
+    subreddit_from
+ORDER BY
+    count(*) DESC
+LIMIT 10;
+#+END_SRC
+
+#+RESULTS:
+| subreddit_from   | count |
+|------------------+-------|
+| nsfw411          | 41523 |
+| listofsubreddits | 11397 |
+| europeanculture  | 10829 |
+| modcoord         |  8732 |
+| locationreddits  |  6310 |
+| findareddit      |  5317 |
+| troudbot         |  4979 |
+| subredditdrama   |  2791 |
+| annuaire         |  2725 |
+| save3rdpartyapps |  2436 |
+
+** Most widely-referencing subreddits
+#+BEGIN_SRC sql
+SELECT
+    subreddit_from,
+    count(total)
+FROM
+    wiki_refs
+WHERE
+    subreddit_from <> subreddit_to
+GROUP BY
+    subreddit_from
+ORDER BY
+    sum(TOTAL) DESC
+LIMIT 10;
+#+END_SRC
+
+#+RESULTS:
+| subreddit_from       |   sum |
+|----------------------+-------|
+| nsfw411              | 48528 |
+| so_doge_tip          | 37202 |
+| listofsubreddits     | 20207 |
+| random_acts_of_pizza | 18210 |
+| europeanculture      | 17706 |
+| annuaire             | 17257 |
+| universalscammerlist | 16398 |
+| subredditdrama       | 15570 |
+| millennialbets       | 13019 |
+| findareddit          | 11887 |
+
+** Most referenced subreddits excl.self-refs
+#+BEGIN_SRC sql
+SELECT
+    subreddit_to,
+    sum(total)
+FROM
+    wiki_refs
+WHERE
+    subreddit_from <> subreddit_to
+GROUP BY
+    subreddit_to
+ORDER BY
+    sum(TOTAL) DESC
+LIMIT 10;
+#+END_SRC
+
+#+RESULTS:
+| subreddit_to      |   sum |
+|-------------------+-------|
+| dogecoin          | 29904 |
+| pushshift         | 11745 |
+| counting          | 11049 |
+| assistance        |  6729 |
+| dogecoinbeg       |  6245 |
+| funkoswap         |  5372 |
+| pkmntcgreferences |  4815 |
+| worldnews         |  4737 |
+| borrow            |  4352 |
+| wallstreetbets    |  4049 |
+
+** Most widely-referenced subreddits
+#+BEGIN_SRC sql
+SELECT
+    subreddit_to,
+    count(*)
+FROM (
+    SELECT
+        subreddit_to
+    FROM
+        wiki_refs
+    GROUP BY
+        subreddit_to,
+        subreddit_from) AS subreddits_to
+GROUP BY
+    subreddit_to
+ORDER BY
+    count(*) DESC
+LIMIT 10;
+#+END_SRC
+
+#+RESULTS:
+| subreddit_to         | count |
+|----------------------+-------|
+| modnews              |   536 |
+| iama                 |   341 |
+| askreddit            |   273 |
+| moderatelyhelpfulbot |   263 |
+| suicidewatch         |   256 |
+| anime                |   219 |
+| icandrawthat         |   206 |
+| depression           |   203 |
+| reddit               |   202 |
+| imaginarynetwork     |   201 |
+
+** Most referenced non-existent subreddits
+#+BEGIN_SRC sql
+SELECT
+    wiki_refs.subreddit_to,
+    sum(wiki_refs.total)
+FROM
+    wiki_refs
+    JOIN subreddits ON subreddits.name = wiki_refs.subreddit_to
+WHERE
+    subreddits.nsfw IS NULL
+GROUP BY
+    wiki_refs.subreddit_to
+ORDER BY
+    sum(wiki_refs.total) DESC
+LIMIT 10;
+#+END_SRC
+
+#+RESULTS:
+| subreddit_to         |  sum |
+|----------------------+------|
+| wishlist             | 3344 |
+| karmacoin            | 2951 |
+| gendercritical       | 1055 |
+| steamaccountsforsale |  827 |
+| karmashares          |  446 |
+| all                  |  423 |
+| comments             |  340 |
+| pornoverlords        |  339 |
+| randomactsofpizza    |  321 |
+| the_donald           |  222 |
+
+** Subreddits with most wiki pages
+#+BEGIN_SRC sql
+SELECT
+    subreddit,
+    count(*)
+FROM
+    wikis
+GROUP BY
+    subreddit
+ORDER BY
+    count(*) DESC
+LIMIT 10;
+#+END_SRC
+
+#+RESULTS:
+| subreddit       | count |
+|-----------------+-------|
+| watchexchange   | 26508 |
+| headphoneadvice |  6965 |
+| so_doge_tip     |  5727 |
+| squaredcircle   |  5539 |
+| hfy             |  5224 |
+| subredditdrama  |  3866 |
+| ffrecordkeeper  |  3804 |
+| kpop            |  2393 |
+| garlicmarket    |  2111 |
+| ffbraveexvius   |  1960 |
+
+** Most common wiki pages
+#+BEGIN_SRC sql
+SELECT
+    name,
+    count(*)
+FROM
+    wikis
+GROUP BY
+    name
+ORDER BY
+    count(*) DESC
+LIMIT 10;
+#+END_SRC
+
+#+RESULTS:
+| name                   | count |
+|------------------------+-------|
+| config/description     | 45604 |
+| config/sidebar         | 43139 |
+| config/submit_text     | 35571 |
+| index                  | 22182 |
+| config/welcome_message |  9391 |
+| rules                  |  3404 |
+| automoderator-schedule |  3328 |
+| faq                    |  3307 |
+| automoderator          |   768 |
+| resources              |   734 |
+
+** Last subreddit reached
+After 3 wiki runs: r/HempSeeds
+
+** Subreddit with negative subscribers
+r/HoaiBao0906
+
+** Longest username
+u/americanexpressbusiness
+
+** Invalid subreddit name
+r/t:heatdeathoftheuniverse
+
+* Top 50 clusters
+|  ID | % of subreddits | Description                      |
+|-----+-----------------+----------------------------------|
+|  16 |           10.99 | NSFW                             |
+|  69 |            7.81 | Europe                           |
+| 306 |            5.88 | USA, outdoors                    |
+| 145 |            5.09 | Food, travel, cars, finance      |
+|  57 |            4.76 | Wholesome funny                  |
+|   2 |            3.43 | Gaming                           |
+|  91 |            3.37 | General popular content          |
+|  47 |            3.11 | General popular content          |
+| 240 |            2.96 | Music                            |
+| 307 |            2.70 | STEM                             |
+|  51 |            2.45 | General popular content          |
+| 158 |            2.36 | French                           |
+| 481 |            2.23 | TV, Movies                       |
+| 287 |            1.70 | Latin America, Africa            |
+|  11 |            1.61 | Anime                            |
+|   8 |            1.54 | Conversation, advice             |
+| 140 |            1.47 | Programming, videography         |
+| 216 |            1.40 | SciFi, literature                |
+|  13 |            1.29 | Tabletop / card gaming           |
+| 326 |            1.20 | Cats                             |
+|   9 |            1.16 | History, religion, collecting    |
+| 344 |            1.13 | Political left                   |
+|   3 |            1.10 | Hardware                         |
+| 238 |            1.09 | Germany                          |
+| 147 |            1.04 | Fitness                          |
+| 266 |            1.03 | Drugs                            |
+| 115 |            0.95 | True crime, Apex Legends         |
+| 148 |            0.92 | Writing                          |
+| 252 |            0.91 | Smartphones, mobile/gacha gaming |
+| 123 |            0.76 | India                            |
+| 460 |            0.73 | Football                         |
+|  22 |            0.68 | Korean media                     |
+| 183 |            0.67 | Occult, Conspiracies, Coffee     |
+|  26 |            0.65 | Pokemon                          |
+| 409 |            0.58 | Bot tests (r/goldtesting)        |
+|  18 |            0.57 | Cryptocurrency                   |
+| 159 |            0.57 | Fishing                          |
+|  37 |            0.55 | Online gaming                    |
+|  17 |            0.54 | Comics                           |
+|  28 |            0.52 | Japan                            |
+|  81 |            0.51 | Philippines                      |
+| 189 |            0.49 | Medicine                         |
+| 207 |            0.47 | Transgender                      |
+|  30 |            0.46 | Photography, drawing             |
+|  12 |            0.45 | Australia                        |
+| 426 |            0.44 | Art                              |
+| 301 |            0.43 | Cycling                          |
+|  34 |            0.43 | Languages                        |
+| 109 |            0.42 | Ironic comedy                    |
+|  25 |            0.41 | Texas, College                   |
+
+* Gephi import queries
+#+NAME: Node Query
+#+BEGIN_SRC sql
+SELECT name AS id, subscribers AS size, subscribers, nsfw FROM subreddits WHERE nsfw IS NOT NULL AND NOT disconnected
+#+END_SRC
+
+#+NAME: Edge Query
+#+BEGIN_SRC sql
+SELECT subreddit_from AS source, subreddit_to AS target, total AS weight FROM wiki_refs JOIN subreddits ON subreddits.name = wiki_refs.subreddit_to WHERE subreddits.nsfw IS NOT NULL AND NOT subreddits.disconnected
+#+END_SRC
