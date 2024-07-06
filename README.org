@@ -1,7 +1,7 @@
 #+TITLE: Graph of Reddit
 #+PROPERTY: header-args:sql :engine postgres :dbhost localhost :dbport 5432 :dbuser root :dbpassword 1234 :database reddit
 
-[[http://158.101.200.139/4k/egdes_no_labels.png]]
+[[http://158.101.200.139/2k/egdes_no_labels.jpg]]
 
 This is a graph of all of Reddit.com, as of June 2024. The graphs show cross-references between subreddits in their wikis, sidebars, descriptions, etc.
 
